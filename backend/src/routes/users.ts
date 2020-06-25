@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcrypt'
+import jwt from 'jsonwebtoken'
 
 const prisma = new PrismaClient()
 export const userRouter = Router()
@@ -11,14 +13,38 @@ userRouter.get('/', async (req, res) => {
 })
 
 // Creates a User, still need to add auth and checks
-userRouter.post('/', async ({ body: { email, name, password } }, res) => {
+userRouter.post('/new', async ({ body: { email, name, username, password } }, res) => {
     // const { email, name, password } = req.body
+    const hashedPassword = await bcrypt.hash(password, 10)
     const newUser = await prisma.user.create({
         data: {
-            email, name, password
+            email, name, username, password: hashedPassword
         }
     })
-    return res.json(newUser)
+    return res.json(`User ${username} has been created`)
+})
+
+// Login
+userRouter.post('/login', async ({ body: { username, password } }, res) => {
+    const user = await prisma.user.findOne({
+        where: {
+            username
+        }
+    })
+    if (!user) {
+        throw new Error('user does not exist')
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password)
+
+    if (!passwordMatch) {
+        throw new Error('Incorrect username or password')
+    }
+
+    const token = jwt.sign({ id: user.id, username: user.username }, '1234567890', { expiresIn: '30d' })
+
+    return res.json(token)
+
 })
 
 // Deletes a user given an id or email
